@@ -1,0 +1,21 @@
+{
+  "private": true,
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "scss": "^0.2.4",
+    "zip-dir": "^2.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
+    "babel-loader": "^9.2.1",
+    "terser-webpack-plugin": "^5.3.10",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4"
+  },
+  "scripts": {
+    "create-release": "node create-release.js",
+    "dev": "npx webpack --config webpack.config.js"
+  }
+}
