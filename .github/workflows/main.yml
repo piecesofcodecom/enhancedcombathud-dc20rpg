@@ -32,10 +32,9 @@ jobs:
       with:
         node-version: '18'
     - run: npm install
-    - run: npm run build
 
     # Create a zip file with all files required by the module to add to the release
-    - run: zip -r ./module.zip module.json README.md LICENSE assets/ styles/ scripts/ dist/
+    - run: zip -r ./module.zip module.json README.md LICENSE assets/ styles/ scripts/ languages/
 
     # Create a release for this specific version
     - name: Update Release with Files
