@@ -1,13 +1,16 @@
 import { MODULE_ID } from "./main.js";
 import { loadActions, actionCategories } from "./actions.js";
 const ECHItems = {};
+const OFFENSIVEItems = {};
+const DEFENSIVEItems = {};
+const REACTIONItems = {};
 let actionItems;
 
-export function initConfig() {
-    Hooks.on("argonInit", (CoreHUD) => {
+export async function initConfig() {
+    Hooks.on("argonInit", async (CoreHUD) => {
         actionItems = loadActions();
         if (game.system.id !== "dc20rpg") return;
-        registerItems();
+        await registerItems();
         const ARGON = CoreHUD.ARGON;
         class DC20Tooltip extends ARGON.CORE.Tooltip{
             get classes() {
@@ -15,14 +18,6 @@ export function initConfig() {
             }
         }
 
-        const isMIDI = game.modules.get("midi-qol")?.active;
-        const getMidiFlag = (actionType) => {
-            if (!isMIDI || !ui.ARGON._actor) return null;
-            const flag = ui.ARGON._actor.getFlag("midi-qol", "actions") ?? {};
-            const value = flag[actionType] ?? false;
-            const midiAction = value ? 0 : 1;
-            return midiAction;
-        };
 
         const getActivationType = (item) => {
             if (!item?.system?.activities) {
@@ -62,14 +57,14 @@ export function initConfig() {
         //if (game.settings.get(MODULE_ID, "showWeaponsItems")) itemTypes.consumable.push("weapon");
         //if (game.settings.get(MODULE_ID, "showClassActions")) mainBarFeatures.push("class");
         
-        CoreHUD.DND5E = {
+        /*CoreHUD.DND5E = {
             actionTypes,
             itemTypes,
             mainBarFeatures,
             ECHItems,
         };
 
-        Hooks.callAll("enhanced-combat-hud.dc20prg.initConfig", { actionTypes, itemTypes, ECHItems });
+        Hooks.callAll("enhanced-combat-hud.dc20prg.initConfig", { actionTypes, itemTypes, ECHItems });*/
 
         async function getTooltipDetails(item, type) {
             console.log(type)
@@ -288,9 +283,9 @@ export function initConfig() {
                     return "";
                 }
             }
-            async _renderInner(data) {
-                await super._renderInner(data);
-            }
+            // async _renderInner(data) {
+            //     await super._renderInner(data);
+            // }
 
             get isDead() {
                 return false; //this.isDying && this.actor.type !== "character";
@@ -309,8 +304,54 @@ export function initConfig() {
             }
 
             async getData() {
-                //let super_data = super.getData();
+                const immunities = [];
+                for (let [key, condition] of Object.entries(this.actor.system.conditions)) {
+                    if (condition.immunity) {
+                        immunities.push(condition.label);
+                    }
+                }
+                const resistence = []
+                for (let [key, value] of Object.entries(this.actor.system.damageReduction.damageTypes)) {
+                    if (value.immune || value.resistance || value.vulnerability) {
+                        let type = 'immune';
+                        let info = "";
+                        let tooltip = [];
+                        tooltip.push(value.category);
+                        let id =  parent.id;
+    
+                        if (value.vulnerability) {
+                            type = 'vulnerability';
+                            id = 'vulnerability';
+                            info = value.vulnerable;
+                            if (info) {
+                                tooltip.push("Vulnerability (X)");
+                            } else {
+                                tooltip.push("Vulnerability (Double)");
+                            }
+                        } else if (value.resistance) {
+                            type = 'resistence';
+                            id = 'resistence';
+                            info = value.resist;
+                            if (info) {
+                                tooltip.push("Resistance (X)");
+                            } else {
+                                tooltip.push("Resistance (Half)");
+                            }
+                            
+                        } else {
+                            tooltip.push("Resistance (Immune)");
+                            id ="immunity";
+                        }
+                    resistence.push({key: key, type: type, info: info, tooltip: tooltip.join(" ")})
+                    }
+
+                }
                 const data = {
+                    resistences: resistence,
+                    immunities: {
+                        exists: immunities.length > 0 ? true : false,
+                        label: "Immunities to: " + immunities.join(", ")
+                    },
                     actionPoints: {
                         current: this.actor.system.resources.ap.value,
                         max: this.actor.system.resources.ap.max,
@@ -660,59 +701,119 @@ export function initConfig() {
             }
         }
 
-        class DC20ActionActionPanel extends ARGON.MAIN.ActionPanel {
+        class DC20ActionsActionPanel extends ARGON.MAIN.ActionPanel {
             constructor(...args) {
                 super(...args);
             }
 
             get label() {
-                return "dc20rpg.sheet.nav.core";
+                return "Actions";
             }
 
             get maxActions() {
-                return this.actor?.inCombat ? 1 : null;
+                return this.actor?.inCombat ? this.actor.system.resources.ap.value : null;
             }
 
             get currentActions() {
-                return getMidiFlag("action") ?? (this.isActionUsed ? 0 : 1);
+                return this.isActionUsed;
             }
 
             _onNewRound(combat) {
-                this.isActionUsed = false;
+                this.isActionUsed = 0;
                 this.updateActionUse();
             }
 
             async _getButtons() {
-                const spellItems = this.actor.items.filter((item) => itemTypes.spell.includes(item.type) /*&& actionTypes.action.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value)*/);
-                const techniqueItems = this.actor.items.filter((item) => item.type == 'technique');
-                //const featItems = this.actor.items.filter((item) => itemTypes.feat.includes(item.type) && actionTypes.action.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value));
-                //const featItems = this.actor.items.filter((item) => item.type == "technique");
-                const featItems = (this.actor.items.filter((item) => item.type == "feature" && !["attack"].includes(item.system.actionType)))
-                const consumableItems = this.actor.items.filter((item) => itemTypes.consumable.includes(item.type) && actionTypes.action.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value));
-                const  maneuverItems = this.actor.items.filter(i => i.type === "technique" && !techniqueTypes.includes(i.system.techniqueOrigin));
+                /**
+                 * OFFENSIVE ACTIONS | 
+                 * 4 botões disarm, grapple, shove, tackle |
+                 * SPELLS | 
+                 * DEFENSIVE ACTIONS | 
+                 * 4 botões extras disengage, fulldisengage, dodge, full dodge | 
+                 * OTHERS
 
+                 */
+                const offensiveItemTypes = ["maneuver", "technique", "weapon", "feature"];
+                const defensiveItemTypes = offensiveItemTypes;
+                const otherItemTypes = offensiveItemTypes;
+                const offensiveActionTypes = ["attack", "check", "dynamic"];
+                const defensiveDefaultActions = Object.values(DEFENSIVEItems);
+                const defensiveActionTypes = ["save"];
+                const otherActionTypes = [...offensiveActionTypes, ...defensiveActionTypes]
+                
+                const offensiveDefaultActions = Object.values(OFFENSIVEItems);
+                const defaultAttack =
+                    null ??
+                    new CONFIG.Item.documentClass(offensiveDefaultActions[0], {
+                        parent: this.actor,
+                    });
+                    defaultAttack.type = "action";
+                    defaultAttack.details = offensiveDefaultActions[0].details;
+
+                const offensiveActionItems = [defaultAttack, ...(this.actor.items.filter((item) => !(item.system.isReaction) && offensiveItemTypes.includes(item.type) && offensiveActionTypes.includes(item.system.actionType)))];
+                const offensiveButton = !offensiveActionItems.length ? [] : [
+                    new DC20ButtonPanelButton({ type: "offensive", items: offensiveActionItems, color: 0 })].filter((button) => button.hasContents);
+                
+                const spellItems = this.actor.items.filter((item) => itemTypes.spell.includes(item.type) /*&& actionTypes.action.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value)*/);
                 const spellButton = !spellItems.length ? [] : [
                     new DC20ButtonPanelButton({ type: "spell", items: spellItems, color: 0 })].filter((button) => button.hasContents);
+                
+                const defaultDefense =
+                    null ??
+                    new CONFIG.Item.documentClass(defensiveDefaultActions[0], {
+                        parent: this.actor,
+                    });
+                    defaultAttack.type = "action";
+                    defaultAttack.details = defensiveDefaultActions[0].details;
 
-                const techniqueButton = !techniqueItems.length ? [] : [
+                const defensiveActionItems = [defaultDefense, ...(this.actor.items.filter((item) => !(item.system.isReaction) && defensiveItemTypes.includes(item.type) && defensiveActionTypes.includes(item.system.actionType)))];
+                const defensiveButton = !defensiveActionItems.length ? [] : [
+                    new DC20ButtonPanelButton({ type: "defensive", items: defensiveActionItems, color: 0 })].filter((button) => button.hasContents);
+                
+                const seenNames = new Set();
+                const otherActionItems = [
+                    ...(this.actor.items
+                        .filter((item) => !(item.system.isReaction) && otherItemTypes.includes(item.type) && !otherActionTypes.includes(item.system.actionType))
+                        .filter(item => {
+                            if (seenNames.has(item.name)) {
+                              return false;
+                            }
+                            seenNames.add(item.name);
+                            return true;
+                        })
+                    )
+                ];
+                const otherButton = !otherActionItems.length ? [] : [
+                    new DC20ButtonPanelButton({ type: "other", items: otherActionItems, color: 0 })].filter((button) => button.hasContents);
+
+                //const techniqueItems = this.actor.items.filter((item) => item.type == 'technique');
+                //const featItems = this.actor.items.filter((item) => itemTypes.feat.includes(item.type) && actionTypes.action.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value));
+                //const featItems = this.actor.items.filter((item) => item.type == "technique");
+                //const featItems = (this.actor.items.filter((item) => item.type == "feature" && !["attack"].includes(item.system.actionType)))
+                //const consumableItems = this.actor.items.filter((item) => itemTypes.consumable.includes(item.type) && actionTypes.action.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value));
+                //const  maneuverItems = this.actor.items.filter(i => i.type === "technique" && !techniqueTypes.includes(i.system.techniqueOrigin));               
+
+                /*const techniqueButton = !techniqueItems.length ? [] : [
                     new DC20ButtonPanelButton({ type: "technique", items: techniqueItems, color: 0 })].filter((button) => button.hasContents);
 
                 const actionButton = [
                     new DC20ButtonPanelButton({ type: "action", items: actionItems, color: 0 })].filter((button) => button.hasContents);
 
-                const specialActions = Object.values(ECHItems);
+                const specialActions = Object.values(ECHItems);*/
+                
 
                 const showSpecialActions = false;// game.settings.get(MODULE_ID, "showSpecialActions");
                 const buttons = [];
                 if (showSpecialActions) {
                     buttons.push(...[new DC20ItemButton({ item: null, isWeaponSet: true, isPrimary: true }), 
-                                     new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(specialActions[0]),
-                                     new DC20SpecialActionButton(specialActions[1])),
+                                     //new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(specialActions[0]),
+                                     //new DC20SpecialActionButton(specialActions[1])),
+                                     ...offensiveButton,
                                      ...spellButton,
-                                     ...actionButton,
-                                     ...techniqueButton,
-                                     new DC20ButtonPanelButton({ type: "maneuver", items: maneuverItems, color: 0 }),
-                                     new DC20ButtonPanelButton({ type: "feat", items: featItems, color: 0 }),
+                                     //...actionButton,
+                                     //...techniqueButton,
+                                     //new DC20ButtonPanelButton({ type: "maneuver", items: maneuverItems, color: 0 }),
+                                     //new DC20ButtonPanelButton({ type: "feat", items: featItems, color: 0 }),
                                      new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(specialActions[2]),
                                      new DC20SpecialActionButton(specialActions[3])),
                                      new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(specialActions[4]),
@@ -720,28 +821,40 @@ export function initConfig() {
                                      new DC20ButtonPanelButton({ type: "consumable", items: consumableItems, color: 0 })]);
                 } else {
                     buttons.push(...[new DC20ItemButton({ item: null, isWeaponSet: true, isPrimary: true }),
-                                 ...spellButton,
-                                 new DC20ButtonPanelButton({ type: "feat", items: featItems, color: 0 }),
-                                 ...actionButton,
-                                 ...techniqueButton,
-                                 new DC20ButtonPanelButton({ type: "maneuver", items: maneuverItems, color: 0 }),
-                                 new DC20ButtonPanelButton({ type: "consumable", items: consumableItems, color: 0 })]);
+                                ...offensiveButton,
+                                new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(offensiveDefaultActions[1]),
+                                new DC20SpecialActionButton(offensiveDefaultActions[2])),
+                                new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(offensiveDefaultActions[3]),
+                                new DC20SpecialActionButton(offensiveDefaultActions[4])),
+                                ...spellButton,
+                                ...defensiveButton,
+                                new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(defensiveDefaultActions[1]),
+                                new DC20SpecialActionButton(defensiveDefaultActions[2])),
+                                new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(defensiveDefaultActions[3]),
+                                new DC20SpecialActionButton(defensiveDefaultActions[4])),
+                                ...otherButton
+                                //new DC20ButtonPanelButton({ type: "feat", items: featItems, color: 0 }),
+                                //...actionButton,
+                                //...techniqueButton,
+                               // new DC20ButtonPanelButton({ type: "maneuver", items: maneuverItems, color: 0 }),
+                                //new DC20ButtonPanelButton({ type: "consumable", items: consumableItems, color: 0 })
+                            ]);
                 }
 
-                const barItems = this.actor.items.filter((item) => CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value) && actionTypes.action.includes(getActivationType(item)));
-                buttons.push(...condenseItemButtons(barItems));
+                /*const barItems = this.actor.items.filter((item) => CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value) && actionTypes.action.includes(getActivationType(item)));
+                buttons.push(...condenseItemButtons(barItems));*/
 
                 return buttons.filter((button) => button.hasContents || button.items == undefined || button.items.length);
             }
         }
 
-        class DC20InventoryActionPanel extends ARGON.MAIN.ActionPanel {
+        class DC20ReactionsActionPanel extends ARGON.MAIN.ActionPanel {
             constructor(...args) {
                 super(...args);
             }
 
             get label() {
-                return "dc20rpg.sheet.nav.inventory";
+                return "Reactions";
             }
 
             get maxActions() {
@@ -749,7 +862,79 @@ export function initConfig() {
             }
 
             get currentActions() {
-                return getMidiFlag("bonus") ?? (this.isActionUsed ? 0 : 1);
+                return 1;
+                //return getMidiFlag("bonus") ?? (this.isActionUsed ? 0 : 1);
+            }
+
+            _onNewRound(combat) {
+                this.isActionUsed = false;
+                this.updateActionUse();
+            }
+
+            async _getButtons() {
+                const offensiveItemTypes = ["maneuver", "technique", "weapon", "feature"];
+                const defensiveItemTypes = offensiveItemTypes;
+                const otherItemTypes = offensiveItemTypes;
+                const offensiveActionTypes = ["attack", "check", "dynamic"];
+                //const defensiveDefaultActions = Object.values(DEFENSIVEItems);
+                const reactionDefaultActions = Object.values(REACTIONItems);
+                const defensiveActionTypes = ["save"];
+                const otherActionTypes = [...offensiveActionTypes, ...defensiveActionTypes]
+                
+                //const offensiveDefaultActions = Object.values(OFFENSIVEItems);
+
+                const offensiveActionItems = [...(this.actor.items.filter((item) => (item.system.isReaction) && offensiveItemTypes.includes(item.type) && offensiveActionTypes.includes(item.system.actionType)))];
+                const offensiveButton = !offensiveActionItems.length ? [] : [
+                    new DC20ButtonPanelButton({ type: "offensive", items: offensiveActionItems, color: 1 })].filter((button) => button.hasContents);
+    
+
+                const defensiveActionItems = [...(this.actor.items.filter((item) => (item.system.isReaction) && defensiveItemTypes.includes(item.type) && defensiveActionTypes.includes(item.system.actionType)))];
+                const defensiveButton = !defensiveActionItems.length ? [] : [
+                    new DC20ButtonPanelButton({ type: "defensive", items: defensiveActionItems, color: 1 })].filter((button) => button.hasContents);
+                
+                const seenNames = new Set();
+                const otherActionItems = [
+                    ...(this.actor.items
+                        .filter((item) => (item.system.isReaction) && otherItemTypes.includes(item.type) && (!otherActionTypes.includes(item.system.actionType) || item.system.actionType == ""))
+                        .filter(item => {
+                            if (seenNames.has(item.name)) {
+                              return false;
+                            }
+                            seenNames.add(item.name);
+                            return true;
+                        })
+                    )
+                ];
+
+                const otherButton = !otherActionItems.length ? [] : [
+                    new DC20ButtonPanelButton({ type: "other", items: otherActionItems, color: 1 })].filter((button) => button.hasContents);
+                const buttons = [];
+                buttons.push(...[
+                    new ARGON.MAIN.BUTTONS.SplitButton(new DC20SpecialActionButton(reactionDefaultActions[0], 1),
+                    new DC20SpecialActionButton(reactionDefaultActions[1], 1)),
+                    ...offensiveButton,
+                    ...defensiveButton,
+                    ...otherButton
+                ]);
+                return buttons.filter((button) => button.hasContents || button.items == undefined || button.items.length);
+            }
+        }
+
+        class DC20OtherActionPanel extends ARGON.MAIN.ActionPanel {
+            constructor(...args) {
+                super(...args);
+            }
+
+            get label() {
+                return "Other";
+            }
+
+            get maxActions() {
+                return this.actor?.inCombat ? 1 : null;
+            }
+
+            get currentActions() {
+                return 1;
             }
 
             _onNewRound(combat) {
@@ -759,40 +944,7 @@ export function initConfig() {
 
             async _getButtons() {
                 const buttons = [];
-                for(const type in equipItems) {
-                    const items = this.actor.items.filter((item) => item.type == type);
-                    const itemsButton = !items.length ? [] : [
-                        new DC20ButtonPanelButton({ type: type, items: items, color: 1 })].filter((button) => button.hasContents);
-                    buttons.push(...itemsButton);
-                }
-                return buttons.filter((button) => button.hasContents || button.items == undefined || button.items.length);
-            }
-        }
-
-        class DC20ConditionActionPanel extends ARGON.MAIN.ActionPanel {
-            constructor(...args) {
-                super(...args);
-            }
-
-            get label() {
-                return "dc20rpg.sheet.effects.conditions";
-            }
-
-            get maxActions() {
-                return this.actor?.inCombat ? 1 : null;
-            }
-
-            get currentActions() {
-                return getMidiFlag("reaction") ?? (this.isActionUsed ? 0 : 1);
-            }
-
-            _onNewRound(combat) {
-                this.isActionUsed = false;
-                this.updateActionUse();
-            }
-
-            async _getButtons() {
-                const buttons = [];
+                const consumableTypes = ["consumable"]
 
                 const conditionItems = CONFIG.statusEffects.map(obj => {
                     return { ...obj, type: "condition" };
@@ -810,20 +962,15 @@ export function initConfig() {
 
                 const effectsButton = new DC20ButtonPanelButton({ type: 'effect', items: effectItems, color: 3 });
                 if (effectsButton.hasContents) buttons.push(effectsButton);
+
+                const consumableItems = this.actor.items.filter(
+                    (item) => consumableTypes.includes(item.type)); // &&
+                            //actionTypes.action.includes(getActivationType(item)) && 
+                            //!CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value));
+                const consumableButton = new DC20ButtonPanelButton({ type: "consumable", items: consumableItems, color: 3 });
+                if (consumableButton.hasContents) buttons.push(consumableButton);
                 
-                return buttons;
-
-                //buttons.push(new DND5eEquipmentButton({slot: 1}));
-                for (const [type, types] of Object.entries(itemTypes)) {
-                    const items = this.actor.items.filter((item) => types.includes(item.type) && actionTypes.reaction.includes(getActivationType(item)) && !CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value));
-                    if (!items.length) continue;
-                    const button = new DC20ButtonPanelButton({ type, items, color: 3 });
-                    if (button.hasContents) buttons.push(button);
-                }
-
-                const barItems = this.actor.items.filter((item) => CoreHUD.DND5E.mainBarFeatures.includes(item.system.type?.value) && actionTypes.reaction.includes(getActivationType(item)));
-                buttons.push(...condenseItemButtons(barItems));
-
+                
                 return buttons;
             }
         }
@@ -872,7 +1019,7 @@ export function initConfig() {
 
             get visible() {
                 if (!this._isWeaponSet) return super.visible;
-                const isReaction = this.parent instanceof DC20ConditionActionPanel;
+                const isReaction = this.parent instanceof DC20OtherActionPanel;
                 const isMelee = this.activity?.actionType === "mwak";
                 if (isReaction && !isMelee) return false;
                 if (this._isPrimary) return super.visible;
@@ -888,9 +1035,10 @@ export function initConfig() {
             }
 
             async _onLeftClick(event) {
+                console.log(this.item)
                 if (this.item.type == "action") {
                     //game.dc20rpg.tools.promptActionRoll(this.actor,item);
-                    console.warn("not implemented YET")
+                    ui.notifications.warn("Not implemented yet");
                 } else if (["condition", "effect"].includes(this.item.type)) {
                     if (this.actor.statuses.filter((item) => item.id === this.item.id).size) {
                         this.actor.toggleStatusEffect(this.item.id, { active: false });
@@ -903,14 +1051,11 @@ export function initConfig() {
                     }
 
                  } else {
-                    ui.ARGON.interceptNextDialog(event.currentTarget);
-                    game.dc20rpg.tools.promptItemRoll(this.actor, this.actor.items.get(this.item.id))
+                    //await ui.ARGON.interceptNextDialog(event.currentTarget);
+                    await game.dc20rpg.tools.promptItemRoll(this.actor, this.actor.items.get(this.item.id))
+                    
                 }
-                //game.dc20rpg.tools.promptItemRoll(this.token.actor, this.token.actor.items.get(actionId))
-                //const used = await this.item.use({event, legacy: false}, {event});
-                /*if (used) {
-                    DC20ItemButton.consumeActionEconomy(this.activity);
-                }*/
+
             }
 
             async _onRightClick(event) {
@@ -944,26 +1089,26 @@ export function initConfig() {
 
             async render(...args) {
                 await super.render(...args);
-                console.warn(this.item)
                 if (this.activity) {
                     const weapons = this.actor.items.filter((item) => item.consume?.target === this.activity.id);
                     ui.ARGON.updateItemButtons(weapons);
                 }
-                if (this.item.type == "condition") {
+                
+                if (this.item?.type == "condition") {
                     const item = this.actor.statuses.filter((item) => item.id === this.item.id)
                     const backgroundColor = item.size ? "blue" : "";
                     const opacity = item.size ? "1" : "0.5";
                     this.element.style.backgroundColor = backgroundColor;
                     this.element.style.opacity = opacity;
                     
-                } else if (this.item.type == "effect") {
+                } else if (this.item?.type == "effect") {
                     const backgroundColor = this.actor.effects.find((item) => item.name === this.item.name)?.disabled ? "" : "blue";
                     const opacity = this.actor.effects.find((item) => item.name === this.item.name)?.disabled ? "0.5" : "1";
                     this.element.style.backgroundColor = backgroundColor;
                     this.element.style.opacity = opacity;
                 }
             }
-
+            
             get quantity() {
                 if (!this.activity) return null;
                 const showQuantityItemTypes = ["consumable"];
@@ -1015,6 +1160,12 @@ export function initConfig() {
                 switch (this.type) {
                     case "spell":
                         return "dc20rpg.sheet.nav.spells";
+                    case "offensive":
+                        return "Offensive";
+                    case "other":
+                        return "Other";
+                    case "defensive":
+                        return "Defensive";
                     case "feat":
                         return "dc20rpg.sheet.nav.features";
                     case "consumable":
@@ -1042,6 +1193,12 @@ export function initConfig() {
                 switch (this.type) {
                     case "spell":
                         return "modules/enhancedcombathud/icons/spell-book.webp";
+                    case "offensive":
+                        return `modules/${MODULE_ID}/assets/sword-clash.svg`
+                    case "defensive":
+                        return `modules/${MODULE_ID}/assets/checked-shield.svg`;
+                    case "other":
+                        return `modules/${MODULE_ID}/assets/back-forth.svg`;
                     case "feat":
                         return "modules/enhancedcombathud/icons/mighty-force.webp";
                     case "consumable":
@@ -1076,7 +1233,7 @@ export function initConfig() {
 
             prePrepareActions() {
                 let actions = [];
-                if (this.type != "action") return;
+                if (this.type != "other") return;
                 for (let actionType of  actionCategories) {
                     const list = actionItems.filter((item) => item.category == actionType);
                     if (list.length) {
@@ -1088,6 +1245,22 @@ export function initConfig() {
                             },*/
                         });
                     }
+                }
+
+                const categories = [];
+                for (let item of this.items) {
+                    if (!categories.includes(item.type)) categories.push(item.type);
+                }
+                for (let category of categories) {
+                    const list = this.items.filter((item) => item.type == category);
+                    actions.push({
+                        label: category,
+                        buttons: list.map((item) => new DC20ItemButton({ item })),
+                        /*uses: () => {
+                            //return { max: 1, value: 1 };
+                        },*/
+                    });
+                    //console.warn(item);
                 }
                 return actions;
             }
@@ -1197,7 +1370,7 @@ export function initConfig() {
                     return new ARGON.MAIN.BUTTON_PANELS.ACCORDION.AccordionPanel({ id: this.id, accordionPanelCategories: this._spells.map(({ label, buttons, uses }) => new ARGON.MAIN.BUTTON_PANELS.ACCORDION.AccordionPanelCategory({ label, buttons, uses })) });
                 } else if (this.type === "technique") {
                     return new ARGON.MAIN.BUTTON_PANELS.ACCORDION.AccordionPanel({ id: this.id, accordionPanelCategories: this._techniques.map(({ label, buttons, uses }) => new ARGON.MAIN.BUTTON_PANELS.ACCORDION.AccordionPanelCategory({ label, buttons, uses })) });
-                } else if (this.type == "action") {
+                } else if (this.type == "other") {
                     return new ARGON.MAIN.BUTTON_PANELS.ACCORDION.AccordionPanel({ id: this.id, accordionPanelCategories: this._actions.map(({ label, buttons, uses }) => new ARGON.MAIN.BUTTON_PANELS.ACCORDION.AccordionPanelCategory({ label, buttons, uses })) });
                 }else {
                     return new ARGON.MAIN.BUTTON_PANELS.ButtonPanel({ id: this.id, buttons: this.items.map((item) => new DC20ItemButton({ item })) });
@@ -1206,8 +1379,10 @@ export function initConfig() {
         }
 
         class DC20SpecialActionButton extends ARGON.MAIN.BUTTONS.ActionButton {
-            constructor(specialItem) {
+            constructor(specialItem, color=0) {
                 super();
+                this.btncolor = color;
+                this.type = specialItem.type;
                 const actorItem = this.actor.items.getName(specialItem.name);
                 this.actorItem = actorItem;
                 this.item =
@@ -1215,11 +1390,16 @@ export function initConfig() {
                     new CONFIG.Item.documentClass(specialItem, {
                         parent: this.actor,
                     });
+                this.item.type = "action";
+                this.item.details = specialItem.details;
             }
 
             get label() {
                 return this.item.name;
             }
+            get colorScheme() {
+                return this.btncolor;
+              }
 
             get icon() {
                 return this.item.img;
@@ -1227,6 +1407,10 @@ export function initConfig() {
 
             get hasTooltip() {
                 return true;
+            }
+
+            get color() {
+                return 1;
             }
 
             get activity() {
@@ -1243,7 +1427,8 @@ export function initConfig() {
             }
 
             async _onLeftClick(event) {
-                const useCE = game.modules.get("dfreds-convenient-effects")?.active && game.dfreds.effectInterface.findEffect({ effectName: this.label });
+                ui.notifications.warn("Not implemented yet");
+                /*const useCE = game.modules.get("dfreds-convenient-effects")?.active && game.dfreds.effectInterface.findEffect({ effectName: this.label });
                 let success = false;
                 if (useCE) {
                     success = true;
@@ -1253,10 +1438,10 @@ export function initConfig() {
                 }
                 if (success) {
                     DC20ItemButton.consumeActionEconomy(this.item);
-                }
+                }*/
             }
 
-            async createChatMessage() {
+            /*async createChatMessage() {
                 return await ChatMessage.create({
                     user: game.user,
                     speaker: {
@@ -1291,7 +1476,7 @@ export function initConfig() {
 </div>
                     `,
                 });
-            }
+            }*/
         }
 
         class DC20MovementHud extends ARGON.MovementHud {
@@ -1326,13 +1511,18 @@ export function initConfig() {
             async _getButtons() {
                 return [
                     {
-                        label: "LongRest",
-                        onClick: (event) => {},
+                        label: "Rest",
+                        onClick: (event) => { ui.notifications.error("Not implemented yet"); },
                         icon: "fas fa-bed",
                     },
                     {
                         label: "Regain Points",
-                        onClick: (event) => {},
+                        onClick: (event) => { 
+                            const points = ["ap", "grit", "mana", "stamina"];
+                            points.forEach(point => {
+                                this.actor.update({[`system.resources.${point}.value`] : this.actor.system.resources[point].max});
+                            })
+                        },
                         icon: "fa-solid fa-rotate",
                     },
                     {
@@ -1354,7 +1544,7 @@ export function initConfig() {
         class DC20WeaponSets extends ARGON.WeaponSets {
             async getDefaultSets() {
                 const sets = await super.getDefaultSets();
-                const isTransformed = this.actor.flags?.dnd5e?.isPolymorphed;
+                const isTransformed = false; //this.actor.flags?.dnd5e?.isPolymorphed;
                 if (this.actor.type !== "npc" && !isTransformed) return sets;
                 const actions = this.actor.items.filter((item) => item.type === "weapon" && getActivationType(item) === "action");
                 const bonus = this.actor.items.filter((item) => item.type === "weapon" && getActivationType(item) === "bonus");
@@ -1375,7 +1565,7 @@ export function initConfig() {
             }
 
             async _getSets() {
-                const isTransformed = this.actor.flags?.dnd5e?.isPolymorphed;
+                const isTransformed = false; //this.actor.flags?.dnd5e?.isPolymorphed;
 
                 const sets = isTransformed ? await this.getDefaultSets() : foundry.utils.mergeObject(await this.getDefaultSets(), foundry.utils.deepClone(this.actor.getFlag("enhancedcombathud", "weaponSets") || {}));
 
@@ -1409,9 +1599,9 @@ export function initConfig() {
 
         const enableMacroPanel = game.settings.get(MODULE_ID, "macroPanel");
         const mainPanels = [
-            DC20ActionActionPanel,
-            DC20InventoryActionPanel,
-            DC20ConditionActionPanel];
+            DC20ActionsActionPanel,
+            DC20ReactionsActionPanel,
+            DC20OtherActionPanel];
         if (enableMacroPanel) mainPanels.push(ARGON.PREFAB.MacroPanel);
         mainPanels.push(ARGON.PREFAB.PassTurnPanel);
 
@@ -1426,7 +1616,532 @@ export function initConfig() {
     });
 }
 
-function registerItems() {
+async function registerItems() {
+    const DC20RPG = CONFIG.DC20RPG;
+    let offactions = ["attack","disarm", "grapple", "shove", "tackle"];
+    let defactions = ["hide", "disengage","fullDisengage", "dodge", "fullDodge"];
+    let reactions = ["attackOfOpportunity", "spellDuel"];
+    const details = {
+        "attackOfOpportunity": {
+              name: DC20RPG.actions.attackOfOpportunity,
+              description: DC20RPG.actionsJournalUuid.attackOfOpportunity,
+              label: DC20RPG.checks.att,
+              formula: "d20+@attackMod.value.martial",
+              img: "icons/svg/sword.svg",
+              type: "attackCheck",
+              checkKey: "att",
+              apCost: 1,
+              reaction: true
+            },
+        "spellDuel": {
+              name: DC20RPG.actions.spellDuel,
+              description: DC20RPG.actionsJournalUuid.spellDuel,
+              label: DC20RPG.checks.spe,
+              formula: "d20+@attackMod.value.spell",
+              img: "icons/svg/explosion.svg",
+              type: "spellCheck",
+              checkKey: "spe",
+              apCost: 2,
+              reaction: true
+        },
+        "disengage": {
+            name: DC20RPG.actions.disengage,
+            description: DC20RPG.actionsJournalUuid.disengage,
+            label: DC20RPG.actions.disengage,
+            formula: "",
+            img: "icons/svg/combat.svg",
+            type: "",
+            apCost: 1,
+            reaction: false,
+            applyEffect: {
+              name: DC20RPG.actions.disengage,
+              label: DC20RPG.actions.disengage,
+              img: "icons/svg/combat.svg",
+              description: `@UUID[${DC20RPG.actionsJournalUuid.disengage}]{${DC20RPG.actions.disengage}}`,
+              "duration.rounds": 1,
+              changes: [
+                {
+                  key: "system.rollLevel.againstYou.martial.melee",
+                  value: '"value": 1, "type": "dis", "label": "Disengage"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.martial.ranged",
+                  value: '"value": 1, "type": "dis", "label": "Disengage"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.spell.melee",
+                  value: '"value": 1, "type": "dis", "label": "Disengage"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.spell.ranged",
+                  value: '"value": 1, "type": "dis", "label": "Disengage"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.events",
+                  value: '"eventType": "basic", "trigger": "turnStart", "postTrigger":"delete", "effectName": "Disengage"',
+                  mode: 2,
+                  priority: null
+                },
+              ]
+            }
+          },
+        "fullDisengage": {
+            name: DC20RPG.actions.fullDisengage,
+            description: DC20RPG.actionsJournalUuid.fullDisengage,
+            label: DC20RPG.actions.fullDisengage,
+            formula: "",
+            img: "icons/svg/combat.svg",
+            type: "",
+            apCost: 2,
+            reaction: false,
+            applyEffect: {
+              name: DC20RPG.actions.fullDisengage,
+              label: DC20RPG.actions.fullDisengage,
+              img: "icons/svg/combat.svg",
+              description: `@UUID[${DC20RPG.actionsJournalUuid.fullDisengage}]{${DC20RPG.actions.fullDisengage}}`,
+              "duration.rounds": 1,
+              changes: [
+                {
+                  key: "system.events",
+                  value: '"eventType": "basic", "trigger": "turnStart", "postTrigger":"delete", "effectName": "Full Disengage"',
+                  mode: 2,
+                  priority: null
+                },
+              ]
+            }
+          },
+        "dodge": {
+            name: DC20RPG.actions.dodge,
+            description: DC20RPG.actionsJournalUuid.dodge,
+            label: DC20RPG.actions.dodge,
+            formula: "",
+            img: "icons/svg/invisible.svg",
+            type: "",
+            apCost: 1,
+            reaction: false,
+            applyEffect: {
+              name: DC20RPG.actions.dodge,
+              label: DC20RPG.actions.dodge,
+              img: "icons/svg/invisible.svg",
+              description: `@UUID[${DC20RPG.actionsJournalUuid.dodge}]{${DC20RPG.actions.dodge}}`,
+              "duration.rounds": 1,
+              changes: [
+                {
+                  key: "system.rollLevel.againstYou.martial.melee",
+                  value: '"value": 1, "type": "dis", "label": "Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.martial.ranged",
+                  value: '"value": 1, "type": "dis", "label": "Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.spell.melee",
+                  value: '"value": 1, "type": "dis", "label": "Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.spell.ranged",
+                  value: '"value": 1, "type": "dis", "label": "Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.conditions.grapple.advantage",
+                  value: 1,
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.events",
+                  value: '"eventType": "basic", "trigger": "turnStart", "postTrigger":"delete", "effectName": "Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+              ]
+            }
+          },
+        "fullDodge": {
+            name: DC20RPG.actions.fullDodge,
+            description: DC20RPG.actionsJournalUuid.fullDodge,
+            label: DC20RPG.actions.fullDodge,
+            formula: "",
+            img: "icons/svg/invisible.svg",
+            type: "",
+            apCost: 2,
+            reaction: false,
+            applyEffect: {
+              name: DC20RPG.actions.fullDodge,
+              label: DC20RPG.actions.fullDodge,
+              img: "icons/svg/invisible.svg",
+              description: `@UUID[${DC20RPG.actionsJournalUuid.fullDodge}]{${DC20RPG.actions.fullDodge}}`,
+              "duration.rounds": 1,
+              changes: [
+                {
+                  key: "system.rollLevel.againstYou.martial.melee",
+                  value: '"value": 1, "type": "dis", "label": "Full Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.martial.ranged",
+                  value: '"value": 1, "type": "dis", "label": "Full Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.spell.melee",
+                  value: '"value": 1, "type": "dis", "label": "Full Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.rollLevel.againstYou.spell.ranged",
+                  value: '"value": 1, "type": "dis", "label": "Full Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.conditions.grapple.advantage",
+                  value: 1,
+                  mode: 2,
+                  priority: null
+                },
+                {
+                  key: "system.events",
+                  value: '"eventType": "basic", "trigger": "turnStart", "postTrigger":"delete", "effectName": "Full Dodge"',
+                  mode: 2,
+                  priority: null
+                },
+              ]
+            }
+          },
+        "hide": {
+            name: DC20RPG.actions.hide,
+            description: DC20RPG.actionsJournalUuid.hide,
+            label: DC20RPG.checks.ste,
+            formula: "d20+@skills.ste.modifier",
+            img: "icons/svg/cowled.svg",
+            type: "skillCheck",
+            checkKey: "ste",
+            apCost: 1,
+            reaction: false
+          },
+        "attack": {
+            name: CONFIG.DC20RPG.actions.attack,
+            description: CONFIG.DC20RPG.actionsJournalUuid.attack,
+            label: CONFIG.DC20RPG.checks.att,
+            formula: "d20+@attackMod.value.martial",
+            img: "icons/svg/sword.svg",
+            type: "attackCheck",
+            checkKey: "att",
+            apCost: 1,
+            reaction: false
+        },
+        "disarm": {
+            name: CONFIG.DC20RPG.actions.disarm,
+            description: CONFIG.DC20RPG.actionsJournalUuid.disarm,
+            label: CONFIG.DC20RPG.checks.att,
+            formula: "d20+@attackMod.value.martial",
+            img: "icons/svg/lever.svg",
+            type: "attackCheck",
+            checkKey: "att",
+            apCost: 1,
+            reaction: false
+        },
+        "grapple": {
+            name: CONFIG.DC20RPG.actions.grapple,
+            description: CONFIG.DC20RPG.actionsJournalUuid.grapple,
+            label: CONFIG.DC20RPG.checks.ath,
+            formula: "d20+@skills.ath.modifier",
+            img: "icons/svg/trap.svg",
+            type: "skillCheck",
+            checkKey: "att",
+            apCost: 1,
+            reaction: false
+        },
+        "shove": {
+            name: CONFIG.DC20RPG.actions.shove,
+            description: CONFIG.DC20RPG.actionsJournalUuid.shove,
+            label: CONFIG.DC20RPG.checks.ath,
+            formula: "d20+@skills.ath.modifier",
+            img: "icons/svg/thrust.svg",
+            type: "skillCheck",
+            checkKey: "ath",
+            apCost: 1,
+            reaction: false
+        },
+        "tackle": {
+            name: CONFIG.DC20RPG.actions.tackle,
+            description: CONFIG.DC20RPG.actionsJournalUuid.tackle,
+            label: CONFIG.DC20RPG.checks.ath,
+            formula: "d20+@skills.ath.modifier",
+            img: "icons/svg/falling.svg",
+            type: "skillCheck",
+            checkKey: "ath",
+            apCost: 1,
+            reaction: false
+        }
+    }
+
+    for (let action of offactions) {
+        const page = await fromUuid(CONFIG.DC20RPG.actionsJournalUuid[action]);
+
+        OFFENSIVEItems[CONFIG.DC20RPG.actions[action]] = {
+            name: details[action].name,
+            details: details[action],
+            type: "technique",
+            img: details[action].img,
+            system: {
+                type: {
+                    value: "",
+                    subtype: "",
+                },
+                description: page.text.content,
+                source: "",
+                quantity: 1,
+                weight: 0,
+                price: 0,
+                attuned: false,
+                attunement: 0,
+                equipped: false,
+                rarity: "",
+                costs: {
+                    resources: {
+                        actionPoint: details[action].apCost
+                    }
+                },
+                identified: true,
+                activation: {
+                    type: "action",
+                    cost: 1,
+                    condition: "",
+                },
+                duration: {
+                    value: 1,
+                    units: "turn",
+                },
+                target: {
+                    value: null,
+                    width: null,
+                    units: "",
+                    type: "self",
+                },
+                range: {
+                    value: null,
+                    long: null,
+                    units: "",
+                },
+                consume: {
+                    type: "",
+                    target: "",
+                    amount: null,
+                },
+                ability: "",
+                actionType: "util",
+                attackBonus: 0,
+                chatFlavor: "",
+                critical: null,
+                damage: {
+                    parts: [],
+                    versatile: "",
+                },
+                formula: "",
+                save: {
+                    ability: "",
+                    dc: null,
+                    scaling: "spell",
+                },
+            },
+            sort: 0,
+            flags: {
+                core: {
+                    sourceId: "Item.wyQkeuZkttllAFB1",
+                },
+
+                "midi-qol": {
+                    onUseMacroName: "",
+                },
+            },
+        };
+    }
+
+    for (let action of reactions) {
+        const page = await fromUuid(CONFIG.DC20RPG.actionsJournalUuid[action]);
+
+        REACTIONItems[CONFIG.DC20RPG.actions[action]] = {
+            name: details[action].name,
+            details: details[action],
+            type: "technique",
+            img: details[action].img,
+            system: {
+                type: {
+                    value: "",
+                    subtype: "",
+                },
+                description: page.text.content,
+                costs: {
+                    resources: {
+                        actionPoint: details[action].apCost
+                    }
+                },
+                source: "",
+                quantity: 1,
+                weight: 0,
+                price: 0,
+                attuned: false,
+                attunement: 0,
+                equipped: false,
+                rarity: "",
+                identified: true,
+                activation: {
+                    type: "action",
+                    cost: 1,
+                    condition: "",
+                },
+                duration: {
+                    value: 1,
+                    units: "turn",
+                },
+                target: {
+                    value: null,
+                    width: null,
+                    units: "",
+                    type: "self",
+                },
+                range: {
+                    value: null,
+                    long: null,
+                    units: "",
+                },
+                consume: {
+                    type: "",
+                    target: "",
+                    amount: null,
+                },
+                ability: "",
+                actionType: "util",
+                attackBonus: 0,
+                chatFlavor: "",
+                critical: null,
+                damage: {
+                    parts: [],
+                    versatile: "",
+                },
+                formula: "",
+                save: {
+                    ability: "",
+                    dc: null,
+                    scaling: "spell",
+                },
+            },
+            sort: 0,
+            flags: {
+                core: {
+                    sourceId: "Item.wyQkeuZkttllAFB1",
+                },
+
+                "midi-qol": {
+                    onUseMacroName: "",
+                },
+            },
+        };
+    }
+
+    for (let action of defactions) {
+        const page = await fromUuid(CONFIG.DC20RPG.actionsJournalUuid[action]);
+
+        DEFENSIVEItems[CONFIG.DC20RPG.actions[action]] = {
+            name: details[action].name,
+            details: details[action],
+            type: "technique",
+            img: details[action].img,
+            system: {
+                type: {
+                    value: "",
+                    subtype: "",
+                },
+                description: page.text.content,
+                costs: {
+                    resources: {
+                        actionPoint: details[action].apCost
+                    }
+                },
+                source: "",
+                quantity: 1,
+                weight: 0,
+                price: 0,
+                attuned: false,
+                attunement: 0,
+                equipped: false,
+                rarity: "",
+                identified: true,
+                activation: {
+                    type: "action",
+                    cost: 1,
+                    condition: "",
+                },
+                duration: {
+                    value: 1,
+                    units: "turn",
+                },
+                target: {
+                    value: null,
+                    width: null,
+                    units: "",
+                    type: "self",
+                },
+                range: {
+                    value: null,
+                    long: null,
+                    units: "",
+                },
+                consume: {
+                    type: "",
+                    target: "",
+                    amount: null,
+                },
+                ability: "",
+                actionType: "util",
+                attackBonus: 0,
+                chatFlavor: "",
+                critical: null,
+                damage: {
+                    parts: [],
+                    versatile: "",
+                },
+                formula: "",
+                save: {
+                    ability: "",
+                    dc: null,
+                    scaling: "spell",
+                },
+            },
+            sort: 0,
+            flags: {
+                core: {
+                    sourceId: "Item.wyQkeuZkttllAFB1",
+                },
+
+                "midi-qol": {
+                    onUseMacroName: "",
+                },
+            },
+        };
+    }
+
     ECHItems[game.i18n.localize("enhancedcombathud-dc20rpg.items.disengage.name")] = {
         name: game.i18n.localize("enhancedcombathud-dc20rpg.items.disengage.name"),
         type: "feat",
@@ -1871,5 +2586,6 @@ function registerItems() {
             },
         },
     };
+
 }
 

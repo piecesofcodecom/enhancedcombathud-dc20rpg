@@ -599,5 +599,5 @@ export function loadActions() {
     ]
     return actionItems;
 }
-export const actionCategories = ["offensive", "defensive", "utility", "skillBased"];
+export const actionCategories = ["utility", "skillBased"];
 
