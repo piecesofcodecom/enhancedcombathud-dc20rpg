@@ -9,7 +9,7 @@ Hooks.on("setup", async () => {
 });
 
 Hooks.once('init', async function() {
-    registerHandlebars()
+    //registerHandlebars()
 });
 
 

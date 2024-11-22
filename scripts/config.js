@@ -67,7 +67,6 @@ export async function initConfig() {
         Hooks.callAll("enhanced-combat-hud.dc20prg.initConfig", { actionTypes, itemTypes, ECHItems });*/
 
         async function getTooltipDetails(item, type) {
-            console.log(type)
             let title, description, itemType, subtitle, costs, range, dt;
             let damageTypes = [];
             let properties = [];
@@ -276,8 +275,8 @@ export async function initConfig() {
                     const cr = this.actor.system.details.level;
                     return `Level ${cr} ${creatureType}`;
                 } else if (isPC) {
-                    const acenstry = this.actor.items.find(el => el.id == this.actor.system.details.ancestry.id).name;
-                    const classes = this.actor.items.find(el => el.id == this.actor.system.details.class.id).name
+                    const acenstry = this.actor.items.find(el => el.id == this.actor.system.details.ancestry.id)?.name;
+                    const classes = this.actor.items.find(el => el.id == this.actor.system.details.class.id)?.name
                     return `${this.actor.system.details.level} ${classes} (${acenstry})`;
                 } else {
                     return "";
@@ -307,6 +306,7 @@ export async function initConfig() {
                 const immunities = [];
                 for (let [key, condition] of Object.entries(this.actor.system.conditions)) {
                     if (condition.immunity) {
+                        console.warn(condition);
                         immunities.push(condition.label);
                     }
                 }
@@ -316,7 +316,7 @@ export async function initConfig() {
                         let type = 'immune';
                         let info = "";
                         let tooltip = [];
-                        tooltip.push(value.category);
+                        tooltip.push(key);
                         let id =  parent.id;
     
                         if (value.vulnerability) {
@@ -1035,7 +1035,6 @@ export async function initConfig() {
             }
 
             async _onLeftClick(event) {
-                console.log(this.item)
                 if (this.item.type == "action") {
                     //game.dc20rpg.tools.promptActionRoll(this.actor,item);
                     ui.notifications.warn("Not implemented yet");
@@ -1260,7 +1259,6 @@ export async function initConfig() {
                             //return { max: 1, value: 1 };
                         },*/
                     });
-                    //console.warn(item);
                 }
                 return actions;
             }
