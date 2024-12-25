@@ -43,7 +43,7 @@
         "id": "dc20rpg",
         "type": "system",
         "compatibility": {
-          "minimum": "0.8.0"
+          "minimum": "0.8.4"
         }
       }
     ]
