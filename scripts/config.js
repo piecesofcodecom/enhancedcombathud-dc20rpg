@@ -357,16 +357,16 @@ export async function initConfig() {
                         display: this.actor.system.resources.ap.max ? true : false
                     },
                     staminaPoints: {
-                        current: this.actor.system.resources.stamina.value,
-                        max: this.actor.system.resources.stamina.max
+                        current: this.actor.system.resources?.stamina?.value ?? 0,
+                        max: this.actor.system.resources?.stamina?.max ?? 0,
                     },
                     manaPoints: {
-                        current: this.actor.system.resources.mana.value,
-                        max: this.actor.system.resources.mana.max
+                        current: this.actor.system.resources?.mana?.value ?? 0,
+                        max: this.actor.system.resources?.mana?.max ?? 0
                     },
                     gritPoints: {
-                        current: this.actor.system.resources.grit.value,
-                        max: this.actor.system.resources.grit.max
+                        current: this.actor.system.resources?.grit?.value ?? 0,
+                        max: this.actor.system.resources?.grit?.max ?? 0
                     }
                 }
                 const merged = Object.assign({}, await super.getData(), data);
