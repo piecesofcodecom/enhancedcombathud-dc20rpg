@@ -8,9 +8,9 @@ let actionItems;
 
 export async function initConfig() {
     Hooks.on("argonInit", async (CoreHUD) => {
-        actionItems = loadActions();
+        //actionItems = //loadActions();
         if (game.system.id !== "dc20rpg") return;
-        await registerItems();
+        // await registerItems();
         const ARGON = CoreHUD.ARGON;
         class DC20Tooltip extends ARGON.CORE.Tooltip{
             get classes() {
@@ -306,7 +306,6 @@ export async function initConfig() {
                 const immunities = [];
                 for (let [key, condition] of Object.entries(this.actor.system.conditions)) {
                     if (condition.immunity) {
-                        console.warn(condition);
                         immunities.push(condition.label);
                     }
                 }
@@ -525,8 +524,7 @@ export async function initConfig() {
                     tradeSkills = [];
                 }
                 
-                const tools = this.actor.itemTypes.tool;
-
+                const tools = []; //this.actor.itemTypes.tool;
                 const addSign = (value) => {
                     if (value >= 0) return `+${value}`;
                     return value;
@@ -737,18 +735,20 @@ export async function initConfig() {
                 const defensiveItemTypes = offensiveItemTypes;
                 const otherItemTypes = offensiveItemTypes;
                 const offensiveActionTypes = ["attack", "check", "dynamic"];
-                const defensiveDefaultActions = Object.values(DEFENSIVEItems);
+                //const defensiveDefaultActions = Object.values(DEFENSIVEItems);
+                const defensiveDefaultActions = this.actor.items.filter(item => item.system.category == "defensive" && ["basicAction","action"].includes(item.type));
                 const defensiveActionTypes = ["save"];
                 const otherActionTypes = [...offensiveActionTypes, ...defensiveActionTypes]
                 
-                const offensiveDefaultActions = Object.values(OFFENSIVEItems);
+                //let offactions = ["attack","disarm", "grapple", "shove", "tackle"];
+                const offensiveDefaultActions = this.actor.items.filter(item => item.system.category == "offensive" && ["basicAction","action"].includes(item.type));
                 const defaultAttack =
                     null ??
                     new CONFIG.Item.documentClass(offensiveDefaultActions[0], {
                         parent: this.actor,
                     });
-                    defaultAttack.type = "action";
-                    defaultAttack.details = offensiveDefaultActions[0].details;
+                    //defaultAttack.type = "action";
+                    defaultAttack.details = offensiveDefaultActions[0].system.description;
 
                 const offensiveActionItems = [defaultAttack, ...(this.actor.items.filter((item) => !(item.system.isReaction) && offensiveItemTypes.includes(item.type) && offensiveActionTypes.includes(item.system.actionType)))];
                 const offensiveButton = !offensiveActionItems.length ? [] : [
@@ -763,7 +763,7 @@ export async function initConfig() {
                     new CONFIG.Item.documentClass(defensiveDefaultActions[0], {
                         parent: this.actor,
                     });
-                    defaultAttack.type = "action";
+                    //defaultAttack.type = "action";
                     defaultAttack.details = defensiveDefaultActions[0].details;
 
                 const defensiveActionItems = [defaultDefense, ...(this.actor.items.filter((item) => !(item.system.isReaction) && defensiveItemTypes.includes(item.type) && defensiveActionTypes.includes(item.system.actionType)))];
@@ -877,7 +877,7 @@ export async function initConfig() {
                 const otherItemTypes = offensiveItemTypes;
                 const offensiveActionTypes = ["attack", "check", "dynamic"];
                 //const defensiveDefaultActions = Object.values(DEFENSIVEItems);
-                const reactionDefaultActions = Object.values(REACTIONItems);
+                const reactionDefaultActions = this.actor.items.filter(item => item.system.category == "reaction" && ["basicAction","action"].includes(item.type));
                 const defensiveActionTypes = ["save"];
                 const otherActionTypes = [...offensiveActionTypes, ...defensiveActionTypes]
                 
@@ -1035,10 +1035,11 @@ export async function initConfig() {
             }
 
             async _onLeftClick(event) {
-                if (this.item.type == "action") {
+                //if (this.item.type == "action") {
                     //game.dc20rpg.tools.promptActionRoll(this.actor,item);
-                    ui.notifications.warn("Not implemented yet");
-                } else if (["condition", "effect"].includes(this.item.type)) {
+                    //ui.notifications.warn("Not implemented yet");
+                //} else
+                if (["condition", "effect"].includes(this.item.type)) {
                     if (this.actor.statuses.filter((item) => item.id === this.item.id).size) {
                         this.actor.toggleStatusEffect(this.item.id, { active: false });
                         this.element.style.backgroundColor = "";
@@ -1233,18 +1234,18 @@ export async function initConfig() {
             prePrepareActions() {
                 let actions = [];
                 if (this.type != "other") return;
-                for (let actionType of  actionCategories) {
-                    const list = actionItems.filter((item) => item.category == actionType);
-                    if (list.length) {
-                        actions.push({
-                            label: actionType,
-                            buttons: list.map((item) => new DC20ItemButton({ item })),
-                            /*uses: () => {
-                                //return { max: 1, value: 1 };
-                            },*/
-                        });
-                    }
-                }
+                // for (let actionType of  actionCategories) {
+                //     const list = actionItems.filter((item) => item.category == actionType);
+                //     if (list.length) {
+                //         actions.push({
+                //             label: actionType,
+                //             buttons: list.map((item) => new DC20ItemButton({ item })),
+                //             /*uses: () => {
+                //                 //return { max: 1, value: 1 };
+                //             },*/
+                //         });
+                //     }
+                // }
 
                 const categories = [];
                 for (let item of this.items) {
@@ -1388,8 +1389,8 @@ export async function initConfig() {
                     new CONFIG.Item.documentClass(specialItem, {
                         parent: this.actor,
                     });
-                this.item.type = "action";
-                this.item.details = specialItem.details;
+                //this.item.type = "action";
+                this.item.details = specialItem.system.description;
             }
 
             get label() {
@@ -1425,7 +1426,8 @@ export async function initConfig() {
             }
 
             async _onLeftClick(event) {
-                ui.notifications.warn("Not implemented yet");
+                //ui.notifications.warn("Not implemented yet");
+                await game.dc20rpg.tools.promptItemRoll(this.actor, this.actor.items.get(this.item.id))
                 /*const useCE = game.modules.get("dfreds-convenient-effects")?.active && game.dfreds.effectInterface.findEffect({ effectName: this.label });
                 let success = false;
                 if (useCE) {
@@ -1510,7 +1512,7 @@ export async function initConfig() {
                 return [
                     {
                         label: "Rest",
-                        onClick: (event) => { ui.notifications.error("Not implemented yet"); },
+                        onClick: (event) => { game.dc20rpg.tools.createRestDialog(this.actor) },
                         icon: "fas fa-bed",
                     },
                     {
