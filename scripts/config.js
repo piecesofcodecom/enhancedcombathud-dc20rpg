@@ -346,8 +346,44 @@ export async function initConfig() {
                     }
 
                 }
+                // TODO support to custom resources
+                // TODO move all resources to one array
+                const custom_resources = this.actor.system.resources.custom;
+                const resources = []
+                for (const key in this.actor.system.resources) {
+                    if (['health','custom', 'restPoints'].includes(key)) continue;
+                    if (this.actor.system.resources[key].max == 0) continue;
+                    let img = "";
+                    if (key == 'grit') {
+                        img = "systems/dc20rpg/images/sheet/header/grit.svg";
+                    } else if (key == 'mana') {
+                        img = "systems/dc20rpg/images/sheet/header/mana.svg";
+                    } else if (key == 'ap') {
+                        img = "modules/token-action-hud-dc20rpg/assets/ap.svg";
+                    } else if (key == 'stamina') {
+                        img = "systems/dc20rpg/images/sheet/header/stamina.svg";
+                    }
+                    resources.push({
+                        current: this.actor.system.resources[key].value,
+                        max: this.actor.system.resources[key].max,
+                        label: this.actor.system.resources[key].name || game.i18n.localize(`dc20rpg.resource.${key}`),
+                        img: img == "" ? this.actor.system.resources[key].img : img,
+                    })
+                }
+                
+                for (const key in custom_resources) {
+                    if (custom_resources[key].max == 0) continue;
+                    resources.push({
+                        current: custom_resources[key].value,
+                        max: custom_resources[key].max,
+                        label: custom_resources[key].name,
+                        img: custom_resources[key].img,
+                    })
+                }
+                
                 const data = {
                     resistences: resistence,
+                    resources: resources,
                     immunities: {
                         exists: immunities.length > 0 ? true : false,
                         label: "Immunities to: " + immunities.join(", ")
@@ -370,6 +406,7 @@ export async function initConfig() {
                         max: this.actor.system.resources?.grit?.max ?? 0
                     }
                 }
+                
                 const merged = Object.assign({}, await super.getData(), data);
                 return merged;
             }
@@ -1495,6 +1532,9 @@ export async function initConfig() {
                                     this.actor.update({[`system.resources.${point}.value`] : this.actor.system.resources[point].max});
                                 }
                             })
+
+                            // TODO regain custom resources
+                            // this.actor.system.resources.custom
                         },
                         icon: "fa-solid fa-rotate",
                     },
