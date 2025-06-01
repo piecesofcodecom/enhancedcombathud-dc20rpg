@@ -292,7 +292,7 @@ export async function initConfig() {
             }
 
             get isDying() {
-                return false; // this.actor.system.attributes.hp.value <= 0;
+                return this.actor.system.resources.health.current <= 0;
             }
 
             get successes() {
@@ -465,7 +465,7 @@ export async function initConfig() {
                             text: ACText,
                         },
                         {
-                            text: `${this.actor.system.defences.physical.value}`,
+                            text: `${this.actor.system.defences.precision.value}`,
                             color: "var(--ech-movement-baseMovement-background)",
                         },
                     ],
@@ -474,7 +474,7 @@ export async function initConfig() {
                             text: SpellDC,
                         },
                         {
-                            text: `${this.actor.system.defences.mystical.value}`,
+                            text: `${this.actor.system.defences.area.value}`,
                             color: "var(--ech-movement-baseMovement-background)",
                         },
                     ],
